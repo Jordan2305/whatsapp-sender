@@ -1,0 +1,38 @@
+{
+  "name": "whatsapp-sender",
+  "version": "1.0.0",
+  "description": "Aplicación para envío automático de mensajes WhatsApp",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "electron": "electron .",
+    "build": "electron-builder",
+    "pack": "electron-builder --dir"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "sqlite3": "^5.1.6",
+    "whatsapp-web.js": "^1.23.0",
+    "qrcode": "^1.5.3",
+    "cors": "^2.8.5",
+    "body-parser": "^1.20.2"
+  },
+  "devDependencies": {
+    "electron": "^27.0.0",
+    "electron-builder": "^24.6.4",
+    "nodemon": "^3.0.1"
+  },
+  "build": {
+    "appId": "com.whatsapp.sender",
+    "productName": "WhatsApp Sender",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "public/**/*",
+      "node_modules/**/*"
+    ]
+  }
+}
