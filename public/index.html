@@ -14,10 +14,12 @@
             </div>
             <ul class="nav-menu">
                 <li><a href="#" onclick="showSection('dashboard')" class="nav-link active">Dashboard</a></li>
+                <li><a href="#" onclick="showSection('groups')" class="nav-link">Grupos</a></li>
                 <li><a href="#" onclick="showSection('contacts')" class="nav-link">Contactos</a></li>
                 <li><a href="#" onclick="showSection('send-message')" class="nav-link">Enviar Mensaje</a></li>
                 <li><a href="#" onclick="showSection('schedule')" class="nav-link">Programar Mensaje</a></li>
-                <li><a href="#" onclick="showSection('history')" class="nav-link">Historial</a></li>
+                <li><a href="#" onclick="showSection('stats')" class="nav-link">Estadísticas</a></li>
+                <li><a href="#" onclick="showSection('queue')" class="nav-link">Cola de Mensajes</a></li>
             </ul>
         </nav>
 
@@ -30,6 +32,7 @@
                     <div id="whatsapp-status">
                         <span class="status-indicator" id="status-indicator"></span>
                         <span id="status-text">Verificando...</span>
+                        <button id="logout-btn" class="logout-btn" onclick="app.logout()" style="display: none;">Cerrar Sesión</button>
                     </div>
                     <div id="qr-container" style="display: none;">
                         <p>Escanea el código QR con WhatsApp:</p>
@@ -48,6 +51,23 @@
                 </div>
             </section>
 
+            <!-- Grupos -->
+            <section id="groups" class="section">
+                <h1>Gestión de Grupos</h1>
+                <div class="form-card">
+                    <h3>Crear Nuevo Grupo</h3>
+                    <form id="group-form">
+                        <input type="text" id="group-name" placeholder="Nombre del grupo" required>
+                        <textarea id="group-description" placeholder="Descripción del grupo (opcional)"></textarea>
+                        <button type="submit">Crear Grupo</button>
+                    </form>
+                </div>
+                <div class="contacts-list">
+                    <h3>Lista de Grupos</h3>
+                    <div id="groups-container"></div>
+                </div>
+            </section>
+
             <!-- Contactos -->
             <section id="contacts" class="section">
                 <h1>Gestión de Contactos</h1>
@@ -55,13 +75,82 @@
                     <h3>Agregar Nuevo Contacto</h3>
                     <form id="contact-form">
                         <input type="text" id="contact-name" placeholder="Nombre" required>
-                        <input type="tel" id="contact-phone" placeholder="Teléfono (ej: 573001234567)" required>
+                        <div class="phone-input">
+                            <select id="country-code" onchange="app.togglePhoneInput('country-code', 'contact-phone')">
+                                <option value="521">🇲🇽 México (+521)</option>
+                                <option value="1">🇺🇸 USA (+1)</option>
+                                <option value="57">🇨🇴 Colombia (+57)</option>
+                                <option value="34">🇪🇸 España (+34)</option>
+                                <option value="54">🇦🇷 Argentina (+54)</option>
+                                <option value="custom">🌍 Otro (número completo)</option>
+                            </select>
+                            <input type="tel" id="contact-phone" placeholder="3511285647" required>
+                        </div>
+                        <select id="contact-group">
+                            <option value="">Sin grupo</option>
+                        </select>
                         <button type="submit">Agregar Contacto</button>
                     </form>
                 </div>
                 <div class="contacts-list">
-                    <h3>Lista de Contactos</h3>
+                    <div class="contacts-header">
+                        <h3>Lista de Contactos</h3>
+                        <div class="contacts-controls">
+                            <select id="filter-group">
+                                <option value="">Todos los grupos</option>
+                            </select>
+                            <button id="bulk-edit-btn" onclick="app.showBulkEdit()" style="display: none;">Editar Seleccionados</button>
+                        </div>
+                    </div>
                     <div id="contacts-container"></div>
+                </div>
+                
+                <!-- Modal para edición masiva -->
+                <div id="bulk-edit-modal" class="modal" style="display: none;">
+                    <div class="modal-content">
+                        <span class="close" onclick="app.closeBulkEditModal()">&times;</span>
+                        <h3>Editar Contactos Seleccionados</h3>
+                        <form id="bulk-edit-form">
+                            <p id="selected-count"></p>
+                            <select id="bulk-group" required>
+                                <option value="">Seleccionar nuevo grupo</option>
+                            </select>
+                            <div class="modal-buttons">
+                                <button type="submit">Actualizar Grupo</button>
+                                <button type="button" onclick="app.closeBulkEditModal()">Cancelar</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                
+                <!-- Modal para editar contacto -->
+                <div id="edit-contact-modal" class="modal" style="display: none;">
+                    <div class="modal-content">
+                        <span class="close" onclick="app.closeEditModal()">&times;</span>
+                        <h3>Editar Contacto</h3>
+                        <form id="edit-contact-form">
+                            <input type="hidden" id="edit-contact-id">
+                            <input type="text" id="edit-contact-name" placeholder="Nombre" required>
+                            <div class="phone-input">
+                                <select id="edit-country-code" onchange="app.togglePhoneInput('edit-country-code', 'edit-contact-phone')">
+                                    <option value="521">🇲🇽 México (+521)</option>
+                                    <option value="1">🇺🇸 USA (+1)</option>
+                                    <option value="57">🇨🇴 Colombia (+57)</option>
+                                    <option value="34">🇪🇸 España (+34)</option>
+                                    <option value="54">🇦🇷 Argentina (+54)</option>
+                                    <option value="custom">🌍 Otro (número completo)</option>
+                                </select>
+                                <input type="tel" id="edit-contact-phone" placeholder="3511285647" required>
+                            </div>
+                            <select id="edit-contact-group">
+                                <option value="">Sin grupo</option>
+                            </select>
+                            <div class="modal-buttons">
+                                <button type="submit">Guardar Cambios</button>
+                                <button type="button" onclick="app.closeEditModal()">Cancelar</button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             </section>
 
@@ -84,20 +173,44 @@
                 <h1>Programar Mensaje</h1>
                 <div class="form-card">
                     <form id="schedule-form">
-                        <select id="schedule-contact" required>
+                        <div class="radio-group">
+                            <label><input type="radio" name="schedule-type" value="contact" checked> Contacto individual</label>
+                            <label><input type="radio" name="schedule-type" value="group"> Grupo completo</label>
+                        </div>
+                        <select id="schedule-contact">
                             <option value="">Seleccionar contacto</option>
+                        </select>
+                        <select id="schedule-group" style="display: none;">
+                            <option value="">Seleccionar grupo</option>
                         </select>
                         <textarea id="schedule-text" placeholder="Escribe tu mensaje aquí..." required></textarea>
                         <input type="datetime-local" id="schedule-time" required>
+                        <div class="delay-input">
+                            <label for="message-delay">Tiempo de espera entre mensajes (segundos):</label>
+                            <input type="number" id="message-delay" min="1" max="30" value="10" required>
+                            <small>Recomendado: 5-15 segundos. Máximo: 30 segundos</small>
+                        </div>
                         <button type="submit">Programar Mensaje</button>
                     </form>
                 </div>
             </section>
 
-            <!-- Historial -->
-            <section id="history" class="section">
-                <h1>Historial de Mensajes</h1>
-                <div id="history-container"></div>
+            <!-- Estadísticas -->
+            <section id="stats" class="section">
+                <h1>Estadísticas de Envío</h1>
+                <div id="stats-container"></div>
+            </section>
+
+            <!-- Cola de Mensajes -->
+            <section id="queue" class="section">
+                <div class="section-header">
+                    <h1>Cola de Mensajes Programados</h1>
+                    <div class="queue-buttons">
+                        <button class="refresh-btn" onclick="app.loadQueue()">Actualizar</button>
+                        <button class="clear-btn" onclick="app.clearQueue()">Limpiar Cola</button>
+                    </div>
+                </div>
+                <div id="queue-container"></div>
             </section>
         </main>
     </div>

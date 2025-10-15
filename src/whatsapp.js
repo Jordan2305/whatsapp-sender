@@ -65,6 +65,19 @@ class WhatsAppService {
     const contacts = await this.client.getContacts();
     return contacts.filter(contact => contact.isMyContact);
   }
+
+  async logout() {
+    try {
+      if (this.client) {
+        await this.client.logout();
+        this.isReady = false;
+        this.qrCode = null;
+      }
+    } catch (error) {
+      console.error('Error during logout:', error);
+      throw error;
+    }
+  }
 }
 
 module.exports = WhatsAppService;

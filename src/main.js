@@ -9,11 +9,16 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    show: false,
+    backgroundColor: '#f5f5f5',
+    icon: path.join(__dirname, '../public/icon.ico'),
     webPreferences: {
       nodeIntegration: false,
-      contextIsolation: true
-    },
-    icon: path.join(__dirname, '../public/icon.png')
+      contextIsolation: true,
+      enableRemoteModule: false,
+      webSecurity: true,
+      backgroundThrottling: false
+    }
   });
 
   // Iniciar servidor
@@ -21,15 +26,23 @@ function createWindow() {
     cwd: path.join(__dirname, '..')
   });
 
+  // Mostrar ventana cuando esté lista
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+  });
+
   // Esperar a que el servidor inicie
   setTimeout(() => {
     mainWindow.loadURL('http://localhost:3000');
-  }, 3000);
+  }, 2000);
 
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
 }
+
+// Desactivar aceleración por hardware para evitar errores GPU
+app.disableHardwareAcceleration();
 
 app.whenReady().then(createWindow);
 

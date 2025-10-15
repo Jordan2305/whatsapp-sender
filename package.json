@@ -7,20 +7,21 @@
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "electron": "electron .",
-    "build": "electron-builder",
-    "pack": "electron-builder --dir"
+    "build": "electron-packager . WhatsApp-Sender --platform=win32 --arch=x64 --out=dist --overwrite --icon=public/icon.ico",
+    "clean-db": "node scripts/clean-database.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "sqlite3": "^5.1.6",
-    "whatsapp-web.js": "^1.23.0",
-    "qrcode": "^1.5.3",
+    "body-parser": "^1.20.2",
     "cors": "^2.8.5",
-    "body-parser": "^1.20.2"
+    "express": "^4.18.2",
+    "qrcode": "^1.5.3",
+    "sql.js": "^1.13.0",
+    "whatsapp-web.js": "^1.23.0"
   },
   "devDependencies": {
     "electron": "^27.0.0",
     "electron-builder": "^24.6.4",
+    "electron-packager": "^17.1.2",
     "nodemon": "^3.0.1"
   },
   "build": {
@@ -33,6 +34,12 @@
       "src/**/*",
       "public/**/*",
       "node_modules/**/*"
-    ]
+    ],
+    "win": {
+      "target": "portable"
+    },
+    "portable": {
+      "artifactName": "WhatsApp-Sender-Portable.exe"
+    }
   }
 }
