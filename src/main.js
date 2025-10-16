@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, systemPreferences } = require('electron');
 const path = require('path');
 
 let mainWindow;
@@ -15,6 +15,43 @@ function createWindow() {
       webSecurity: false
     }
   });
+
+  // Solicitar permisos explícitamente
+  if (process.platform === 'darwin') {
+    console.log('Requesting macOS permissions...');
+    
+    try {
+      // Solicitar acceso a archivos y carpetas
+      const fileAccess = systemPreferences.getMediaAccessStatus('microphone'); // Esto fuerza el diálogo de permisos
+      console.log('File access status:', fileAccess);
+      
+      // Solicitar permisos de forma explícita
+      if (app.isPackaged) {
+        // Forzar solicitud de permisos usando AppleScript
+        const { execSync } = require('child_process');
+        
+        const requestScript = `
+          tell application "System Events"
+            try
+              set homeFolder to (path to home folder)
+              get contents of homeFolder
+            on error
+              display dialog "WhatsApp Sender necesita acceso a archivos y carpetas para funcionar correctamente.\n\nPor favor, concede los permisos cuando se soliciten." buttons {"OK"} default button "OK"
+            end try
+          end tell
+        `;
+        
+        try {
+          execSync(`osascript -e '${requestScript}'`, { stdio: 'pipe' });
+        } catch (e) {
+          console.log('Permission request completed');
+        }
+      }
+      
+    } catch (error) {
+      console.log('Permission request error:', error.message);
+    }
+  }
 
   // Ejecutar servidor directamente (sin spawn)
   console.log('Starting integrated server...');
@@ -35,7 +72,24 @@ function createWindow() {
 }
 
 app.disableHardwareAcceleration();
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  // Verificar si necesita reubicarse en ubicación fija
+  if (app.isPackaged) {
+    try {
+      const { relocateAppIfNeeded } = require('./app-relocator');
+      const relocated = relocateAppIfNeeded();
+      
+      if (relocated) {
+        // Si se reubicó, la app se reiniciará desde nueva ubicación
+        return;
+      }
+    } catch (error) {
+      console.log('Relocation error:', error.message);
+    }
+  }
+  
+  createWindow();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

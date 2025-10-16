@@ -15,6 +15,7 @@ Aplicación de escritorio para envío automático y manual de mensajes de WhatsA
 
 ## Instalación
 
+### Para Desarrolladores
 1. Instalar dependencias:
 ```bash
 npm install
@@ -27,6 +28,14 @@ npm run dev
 
 3. Abrir navegador en: http://localhost:3000
 
+### Para Clientes (Instalación Automática)
+1. Ejecutar script de instalación:
+```bash
+./install-client.sh
+```
+
+Esto instalará automáticamente Node.js, dependencias y creará la aplicación de escritorio.
+
 ## Uso como App de Escritorio
 
 1. Ejecutar con Electron:
@@ -34,7 +43,7 @@ npm run dev
 npm run electron
 ```
 
-2. Compilar para distribución:
+2. Compilar aplicación:
 ```bash
 npm run build
 ```
@@ -52,7 +61,11 @@ whatsapp-sender/
 │   ├── index.html       # Interfaz principal
 │   ├── css/style.css    # Estilos
 │   └── js/app.js        # JavaScript frontend
+├── scripts/
+│   ├── clean-database.js # Limpiar base de datos
+│   └── clean-session.js  # Limpiar sesión WhatsApp
 ├── data/                # Base de datos SQLite
+├── install-client.sh    # Script instalación cliente
 └── package.json
 ```
 

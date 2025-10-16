@@ -47,3 +47,16 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# Uploads
+uploads/
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.pdf
+*.xlsx
+*.csv
+
+# Package locks (opcional)
+# package-lock.json

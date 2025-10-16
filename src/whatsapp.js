@@ -12,60 +12,55 @@ function findChromiumExecutable() {
   
   if (isPackaged && process.resourcesPath) {
     // En aplicación empaquetada
-    if (platform === 'win32') {
-      possiblePaths = [
-        path.join(process.resourcesPath, 'app', 'node_modules', 'puppeteer', '.local-chromium'),
-        path.join(process.resourcesPath, 'node_modules', 'puppeteer', '.local-chromium')
-      ];
-    } else if (platform === 'darwin') {
-      possiblePaths = [
-        path.join(process.resourcesPath, 'app', 'node_modules', 'puppeteer', '.local-chromium'),
-        path.join(process.resourcesPath, 'node_modules', 'puppeteer', '.local-chromium')
-      ];
-    }
+    possiblePaths = [
+      path.join(process.resourcesPath, 'app', '.chrome-cache'),
+      path.join(process.resourcesPath, '.chrome-cache')
+    ];
   } else {
     // En desarrollo
-    const homeDir = os.homedir();
     possiblePaths = [
-      path.join(__dirname, '..', 'node_modules', 'puppeteer', '.local-chromium'),
-      path.join(homeDir, '.cache', 'puppeteer', 'chrome')
+      path.join(__dirname, '..', '.chrome-cache'),
+      path.join(__dirname, '..', 'node_modules', 'puppeteer', '.local-chromium')
     ];
   }
   
   for (const basePath of possiblePaths) {
     try {
       if (fs.existsSync(basePath)) {
-        const versions = fs.readdirSync(basePath);
-        if (versions.length > 0) {
-          const latestVersion = versions.sort().pop();
-          let possibleExecs = [];
+        // Buscar recursivamente el ejecutable de Chrome
+        const findChromeRecursive = (dir) => {
+          const items = fs.readdirSync(dir);
           
-          if (platform === 'win32') {
-            possibleExecs = [
-              path.join(basePath, latestVersion, 'chrome-win', 'chrome.exe'),
-              path.join(basePath, latestVersion, 'chrome-win32', 'chrome.exe'),
-              path.join(basePath, latestVersion, 'chrome-win64', 'chrome.exe')
-            ];
-          } else if (platform === 'darwin') {
-            possibleExecs = [
-              path.join(basePath, latestVersion, 'chrome-mac-arm64', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'),
-              path.join(basePath, latestVersion, 'chrome-mac-x64', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'),
-              path.join(basePath, latestVersion, 'chrome-mac', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'),
-              path.join(basePath, latestVersion, 'chrome-mac', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing')
-            ];
-          } else if (platform === 'linux') {
-            possibleExecs = [
-              path.join(basePath, latestVersion, 'chrome-linux', 'chrome'),
-              path.join(basePath, latestVersion, 'chrome-linux64', 'chrome')
-            ];
-          }
-          
-          for (const execPath of possibleExecs) {
-            if (fs.existsSync(execPath)) {
-              return execPath;
+          for (const item of items) {
+            const fullPath = path.join(dir, item);
+            const stat = fs.statSync(fullPath);
+            
+            if (stat.isDirectory()) {
+              if (platform === 'darwin' && item === 'Google Chrome for Testing.app') {
+                const execPath = path.join(fullPath, 'Contents', 'MacOS', 'Google Chrome for Testing');
+                if (fs.existsSync(execPath)) {
+                  return execPath;
+                }
+              } else if (platform === 'darwin' && item === 'Chromium.app') {
+                const execPath = path.join(fullPath, 'Contents', 'MacOS', 'Chromium');
+                if (fs.existsSync(execPath)) {
+                  return execPath;
+                }
+              } else {
+                const result = findChromeRecursive(fullPath);
+                if (result) return result;
+              }
+            } else if (platform === 'win32' && item === 'chrome.exe') {
+              return fullPath;
+            } else if (platform === 'linux' && item === 'chrome') {
+              return fullPath;
             }
           }
-        }
+          return null;
+        };
+        
+        const result = findChromeRecursive(basePath);
+        if (result) return result;
       }
     } catch (error) {
       console.log('Error checking path:', basePath, error.message);
@@ -77,28 +72,16 @@ function findChromiumExecutable() {
 
 class WhatsAppService {
   constructor() {
-    const isPackaged = process.env.NODE_ENV === 'production' || process.resourcesPath;
-    
-    // Configurar directorio de sesión
-    let sessionPath;
-    if (isPackaged && process.resourcesPath) {
-      // En aplicación empaquetada, usar directorio temporal del usuario
-      const userDataPath = path.join(os.homedir(), '.whatsapp-sender');
-      if (!fs.existsSync(userDataPath)) {
-        fs.mkdirSync(userDataPath, { recursive: true });
-      }
-      sessionPath = path.join(userDataPath, '.wwebjs_auth');
-    } else {
-      sessionPath = path.join(__dirname, '../.wwebjs_auth');
+    // Configurar directorio de sesión en home del usuario
+    const userDataPath = path.join(os.homedir(), '.whatsapp-sender');
+    if (!fs.existsSync(userDataPath)) {
+      fs.mkdirSync(userDataPath, { recursive: true });
     }
-    
-    // Crear directorio si no existe
-    if (!fs.existsSync(sessionPath)) {
-      fs.mkdirSync(sessionPath, { recursive: true });
-    }
+    const sessionPath = path.join(userDataPath, '.wwebjs_auth');
     
     console.log('WhatsApp session path:', sessionPath);
     
+    // Configuración simplificada - Puppeteer usará su Chromium por defecto
     let puppeteerConfig = {
       headless: true,
       timeout: 120000,
@@ -106,57 +89,13 @@ class WhatsAppService {
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
         '--no-first-run',
-        '--no-zygote',
         '--disable-gpu',
-        '--disable-web-security',
-        '--disable-features=VizDisplayCompositor',
-        '--disable-background-timer-throttling',
-        '--disable-backgrounding-occluded-windows',
-        '--disable-renderer-backgrounding'
+        '--disable-web-security'
       ]
     };
     
-    // Buscar Chromium
-    const chromiumPath = findChromiumExecutable();
-    if (chromiumPath) {
-      puppeteerConfig.executablePath = chromiumPath;
-      console.log('Using Chromium at:', chromiumPath);
-    } else {
-      console.log('Chromium not found, using system Chrome');
-      // Intentar usar Chrome del sistema según la plataforma
-      const platform = os.platform();
-      let systemChromePaths = [];
-      
-      if (platform === 'win32') {
-        systemChromePaths = [
-          'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-          'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-          path.join(os.homedir(), 'AppData\\Local\\Google\\Chrome\\Application\\chrome.exe')
-        ];
-      } else if (platform === 'darwin') {
-        systemChromePaths = [
-          '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-          '/Applications/Chromium.app/Contents/MacOS/Chromium',
-          path.join(os.homedir(), '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome')
-        ];
-      } else if (platform === 'linux') {
-        systemChromePaths = [
-          '/usr/bin/google-chrome',
-          '/usr/bin/chromium-browser',
-          '/usr/bin/chromium'
-        ];
-      }
-      
-      for (const chromePath of systemChromePaths) {
-        if (fs.existsSync(chromePath)) {
-          puppeteerConfig.executablePath = chromePath;
-          console.log('Using system Chrome at:', chromePath);
-          break;
-        }
-      }
-    }
+    console.log('Using default Puppeteer Chromium');
     
     this.client = new Client({
       authStrategy: new LocalAuth({ 
