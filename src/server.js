@@ -2,6 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const path = require('path');
+const multer = require('multer');
+const XLSX = require('xlsx');
 const Database = require('./database');
 const WhatsAppService = require('./whatsapp');
 
@@ -11,7 +13,43 @@ const PORT = 3000;
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
-app.use(express.static(path.join(__dirname, '../public')));
+
+// Configurar ruta de archivos estáticos
+const isPackaged = process.env.NODE_ENV === 'production' || process.resourcesPath;
+let publicPath;
+
+if (isPackaged && process.resourcesPath) {
+  publicPath = path.join(process.resourcesPath, 'app', 'public');
+} else {
+  publicPath = path.join(__dirname, '../public');
+}
+
+console.log('Public path:', publicPath);
+app.use(express.static(publicPath));
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const isPackaged = process.env.NODE_ENV === 'production' || process.resourcesPath;
+    let uploadDir;
+    
+    if (isPackaged && process.resourcesPath) {
+      uploadDir = path.join(process.resourcesPath, 'app', 'uploads');
+    } else {
+      uploadDir = path.join(__dirname, '../uploads');
+    }
+    
+    if (!require('fs').existsSync(uploadDir)) {
+      require('fs').mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + '-' + file.originalname);
+  }
+});
+
+const upload = multer({ storage });
+const uploadMemory = multer({ storage: multer.memoryStorage() });
 
 // Inicializar servicios
 let db;
@@ -118,7 +156,7 @@ app.delete('/api/contacts/:id', (req, res) => {
   }
 });
 
-app.post('/api/send-message', async (req, res) => {
+app.post('/api/send-message', upload.single('image'), async (req, res) => {
   try {
     const { contactId, message } = req.body;
     const contacts = db.getContacts();
@@ -128,24 +166,30 @@ app.post('/api/send-message', async (req, res) => {
       return res.status(404).json({ error: 'Contact not found' });
     }
 
-    await whatsapp.sendMessage(contact.phone, message);
-    db.updateDailyStats(false);
+    if (req.file) {
+      const imagePath = path.join(__dirname, '../uploads', req.file.filename);
+      await whatsapp.sendMessageWithMedia(contact.phone, message, imagePath);
+    } else {
+      await whatsapp.sendMessage(contact.phone, message);
+    }
     
+    db.updateDailyStats(false);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.post('/api/schedule-message', (req, res) => {
+app.post('/api/schedule-message', upload.single('image'), (req, res) => {
   try {
     const { contactId, groupId, message, scheduledTime, delaySeconds } = req.body;
+    const imagePath = req.file ? path.join(__dirname, '../uploads', req.file.filename) : null;
     let id;
     
     if (groupId) {
-      id = db.scheduleGroupMessage(groupId, message, scheduledTime, delaySeconds);
+      id = db.scheduleGroupMessage(groupId, message, scheduledTime, delaySeconds, imagePath);
     } else {
-      id = db.scheduleMessage(contactId, message, scheduledTime, null, delaySeconds);
+      id = db.scheduleMessage(contactId, message, scheduledTime, null, delaySeconds, imagePath);
     }
     
     res.json({ id });
@@ -176,6 +220,63 @@ app.delete('/api/queue', (req, res) => {
   try {
     db.clearMessageQueue();
     res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/queue/:id', (req, res) => {
+  try {
+    db.deleteScheduledMessage(req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/whatsapp-contacts', async (req, res) => {
+  try {
+    const contacts = await whatsapp.getContacts();
+    res.json(contacts);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/import-contacts', (req, res) => {
+  try {
+    const { contacts } = req.body;
+    const result = db.bulkImportContacts(contacts);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/import-excel', uploadMemory.single('file'), (req, res) => {
+  try {
+    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const data = XLSX.utils.sheet_to_json(worksheet);
+    
+    const contacts = data.map(row => ({
+      name: row.Nombre || row.Name || row.nombre || '',
+      phone: String(row.Telefono || row.Phone || row.telefono || row.Teléfono || '').replace(/\D/g, ''),
+      groupId: null
+    })).filter(contact => contact.name && contact.phone);
+    
+    const result = db.bulkImportContacts(contacts);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/clean-contacts', (req, res) => {
+  try {
+    const result = db.cleanContacts();
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -220,7 +321,11 @@ setInterval(async () => {
           db.updateMessageStatus(msg.id, 'processing');
           
           if (msg.contact_id) {
-            await whatsapp.sendMessage(msg.phone, msg.message);
+            if (msg.image_path) {
+              await whatsapp.sendMessageWithMedia(msg.phone, msg.message, msg.image_path);
+            } else {
+              await whatsapp.sendMessage(msg.phone, msg.message);
+            }
             db.updateMessageStatus(msg.id, 'sent');
             db.updateDailyStats(false);
           } else if (msg.group_id) {
@@ -231,7 +336,11 @@ setInterval(async () => {
             for (let i = 0; i < contacts.length; i++) {
               const contact = contacts[i];
               try {
-                await whatsapp.sendMessage(contact.phone, msg.message);
+                if (msg.image_path) {
+                  await whatsapp.sendMessageWithMedia(contact.phone, msg.message, msg.image_path);
+                } else {
+                  await whatsapp.sendMessage(contact.phone, msg.message);
+                }
                 sentCount++;
                 
                 // Esperar entre mensajes (excepto el último)
@@ -262,7 +371,16 @@ setInterval(async () => {
 
 // Ruta principal
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/index.html'));
+  const isPackaged = process.env.NODE_ENV === 'production' || process.resourcesPath;
+  let indexPath;
+  
+  if (isPackaged && process.resourcesPath) {
+    indexPath = path.join(process.resourcesPath, 'app', 'public', 'index.html');
+  } else {
+    indexPath = path.join(__dirname, '../public/index.html');
+  }
+  
+  res.sendFile(indexPath);
 });
 
 app.listen(PORT, () => {

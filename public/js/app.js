@@ -259,22 +259,43 @@ class WhatsAppSender {
         }
     }
 
+    toggleMessageType(formType) {
+        const imageInput = document.getElementById(`${formType}-image`);
+        const messageType = document.querySelector(`input[name="${formType === 'message' ? 'message-type' : 'schedule-message-type'}"]:checked`).value;
+        
+        if (messageType === 'media') {
+            imageInput.style.display = 'block';
+            imageInput.required = true;
+        } else {
+            imageInput.style.display = 'none';
+            imageInput.required = false;
+        }
+    }
+
     async sendMessage(e) {
         e.preventDefault();
         
         const contactId = document.getElementById('message-contact').value;
         const message = document.getElementById('message-text').value;
+        const imageFile = document.getElementById('message-image').files[0];
         
         try {
+            const formData = new FormData();
+            formData.append('contactId', contactId);
+            formData.append('message', message);
+            if (imageFile) {
+                formData.append('image', imageFile);
+            }
+            
             const response = await fetch('/api/send-message', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ contactId, message })
+                body: formData
             });
             
             if (response.ok) {
                 this.showAlert('Mensaje enviado exitosamente', 'success');
                 document.getElementById('message-form').reset();
+                this.toggleMessageType('message');
                 this.loadStats();
             } else {
                 const error = await response.json();
@@ -311,20 +332,32 @@ class WhatsAppSender {
         const message = document.getElementById('schedule-text').value;
         const scheduledTime = document.getElementById('schedule-time').value;
         const delaySeconds = parseInt(document.getElementById('message-delay').value) || 10;
+        const imageFile = document.getElementById('schedule-image').files[0];
         
         try {
+            const formData = new FormData();
+            formData.append('contactId', contactId || '');
+            formData.append('groupId', groupId || '');
+            formData.append('message', message);
+            formData.append('scheduledTime', scheduledTime);
+            formData.append('delaySeconds', delaySeconds);
+            if (imageFile) {
+                formData.append('image', imageFile);
+            }
+            
             const response = await fetch('/api/schedule-message', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ contactId, groupId, message, scheduledTime, delaySeconds })
+                body: formData
             });
             
             if (response.ok) {
                 this.showAlert('Mensaje programado exitosamente', 'success');
                 document.getElementById('schedule-form').reset();
-                document.getElementById('message-delay').value = 10; // Reset delay to default
+                document.getElementById('message-delay').value = 10;
                 this.toggleScheduleType('contact');
+                this.toggleMessageType('schedule');
                 document.querySelector('input[name="schedule-type"][value="contact"]').checked = true;
+                document.querySelector('input[name="schedule-message-type"][value="text"]').checked = true;
                 this.loadQueue();
             } else {
                 const error = await response.json();
@@ -399,9 +432,13 @@ class WhatsAppSender {
                     <div class="queue-info">
                         <h4>${target}</h4>
                         <p>${item.message}</p>
+                        ${item.image_path ? '<small class="image-indicator">📷 Con imagen</small>' : ''}
                         <small>Programado para: ${scheduledTime.toLocaleString()}</small>
                     </div>
-                    <span class="queue-type">${item.type === 'individual' ? 'Individual' : 'Grupo'}</span>
+                    <div class="queue-actions">
+                        <span class="queue-type">${item.type === 'individual' ? 'Individual' : 'Grupo'}</span>
+                        <button class="delete-btn" onclick="app.deleteQueueItem(${item.id})">Eliminar</button>
+                    </div>
                 `;
                 container.appendChild(queueDiv);
             });
@@ -424,6 +461,133 @@ class WhatsAppSender {
             }
         } catch (error) {
             this.showAlert('Error al limpiar cola', 'error');
+        }
+    }
+
+    async deleteQueueItem(id) {
+        if (!confirm('¿Estás seguro de eliminar este mensaje programado?')) return;
+        
+        try {
+            const response = await fetch(`/api/queue/${id}`, { method: 'DELETE' });
+            
+            if (response.ok) {
+                this.showAlert('Mensaje eliminado exitosamente', 'success');
+                this.loadQueue();
+            } else {
+                this.showAlert('Error al eliminar mensaje', 'error');
+            }
+        } catch (error) {
+            this.showAlert('Error al eliminar mensaje', 'error');
+        }
+    }
+
+    async importWhatsAppContacts() {
+        try {
+            const response = await fetch('/api/whatsapp-contacts');
+            const whatsappContacts = await response.json();
+            
+            if (whatsappContacts.length === 0) {
+                this.showAlert('No se encontraron contactos en WhatsApp', 'error');
+                return;
+            }
+            
+            const contacts = whatsappContacts
+                .filter(contact => {
+                    const cleanPhone = contact.number.replace(/\D/g, '');
+                    return cleanPhone.length >= 10 && cleanPhone.length <= 15;
+                })
+                .map(contact => ({
+                    name: contact.name || contact.pushname || contact.number,
+                    phone: contact.number.replace(/\D/g, ''),
+                    groupId: null
+                }));
+            
+            const importResponse = await fetch('/api/import-contacts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contacts })
+            });
+            
+            const result = await importResponse.json();
+            this.showAlert(`Importados: ${result.imported} contactos. Errores: ${result.errors.length}`, 'success');
+            this.loadContacts();
+        } catch (error) {
+            this.showAlert('Error al importar contactos de WhatsApp', 'error');
+        }
+    }
+
+    async importFromExcel(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        
+        try {
+            let result;
+            
+            if (file.name.endsWith('.csv')) {
+                const text = await file.text();
+                const contacts = this.parseCSV(text);
+                
+                const response = await fetch('/api/import-contacts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contacts })
+                });
+                result = await response.json();
+            } else {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                const response = await fetch('/api/import-excel', {
+                    method: 'POST',
+                    body: formData
+                });
+                result = await response.json();
+            }
+            
+            this.showAlert(`Importados: ${result.imported} contactos. Errores: ${result.errors.length}`, 'success');
+            this.loadContacts();
+        } catch (error) {
+            this.showAlert('Error al procesar archivo', 'error');
+        }
+    }
+
+    parseCSV(text) {
+        const lines = text.split('\n').filter(line => line.trim());
+        const contacts = [];
+        
+        for (let i = 1; i < lines.length; i++) {
+            const columns = lines[i].split(',').map(col => col.trim().replace(/"/g, ''));
+            if (columns.length >= 2) {
+                contacts.push({
+                    name: columns[0],
+                    phone: columns[1].replace(/\D/g, ''),
+                    groupId: null
+                });
+            }
+        }
+        
+        return contacts;
+    }
+
+    async cleanContacts() {
+        if (!confirm('¿Estás seguro de limpiar contactos? Esto eliminará duplicados y números inválidos.')) return;
+        
+        try {
+            const response = await fetch('/api/clean-contacts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+                this.showAlert(`Limpieza completada: ${result.cleaned} inválidos y ${result.duplicates} duplicados eliminados`, 'success');
+                this.loadContacts();
+            } else {
+                this.showAlert(result.error || 'Error al limpiar contactos', 'error');
+            }
+        } catch (error) {
+            this.showAlert('Error al limpiar contactos', 'error');
         }
     }
 

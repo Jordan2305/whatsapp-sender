@@ -8,15 +8,23 @@
     "dev": "nodemon src/server.js",
     "electron": "electron .",
     "build": "electron-packager . WhatsApp-Sender --platform=win32 --arch=x64 --out=dist --overwrite --icon=public/icon.ico",
-    "clean-db": "node scripts/clean-database.js"
+    "build-mac": "electron-packager . WhatsApp-Sender --platform=darwin --arch=x64 --out=dist --overwrite --ignore='node_modules/.cache|data/.wwebjs_auth' --no-prune",
+    "build-mac-builder": "electron-builder --mac",
+    "clean-db": "node scripts/clean-database.js",
+    "prepare-build": "node scripts/prepare-build.js",
+    "clean-session": "node scripts/clean-session.js",
+    "debug-build": "node scripts/clean-session.js && node scripts/prepare-build.js && npm run build-mac"
   },
   "dependencies": {
     "body-parser": "^1.20.2",
     "cors": "^2.8.5",
     "express": "^4.18.2",
+    "multer": "^2.0.2",
+    "puppeteer": "^24.25.0",
     "qrcode": "^1.5.3",
     "sql.js": "^1.13.0",
-    "whatsapp-web.js": "^1.23.0"
+    "whatsapp-web.js": "^1.23.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "electron": "^27.0.0",
@@ -33,7 +41,19 @@
     "files": [
       "src/**/*",
       "public/**/*",
-      "node_modules/**/*"
+      "node_modules/**/*",
+      "data/**/*",
+      "uploads/**/*",
+      "scripts/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "node_modules",
+        "to": "node_modules",
+        "filter": [
+          "**/*"
+        ]
+      }
     ],
     "win": {
       "target": "portable"

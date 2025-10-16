@@ -4,7 +4,18 @@ const path = require('path');
 
 class WhatsAppDatabase {
   constructor() {
-    this.dbPath = path.join(__dirname, '../data/whatsapp.db');
+    // Usar ruta absoluta que funcione en aplicación empaquetada
+    const isPackaged = process.env.NODE_ENV === 'production' || process.resourcesPath;
+    
+    if (isPackaged && process.resourcesPath) {
+      // En aplicación empaquetada
+      this.dbPath = path.join(process.resourcesPath, 'app', 'data', 'whatsapp.db');
+    } else {
+      // En desarrollo
+      this.dbPath = path.join(__dirname, '../data/whatsapp.db');
+    }
+    
+    console.log('Database path:', this.dbPath);
     this.init();
   }
 
@@ -26,6 +37,7 @@ class WhatsAppDatabase {
     }
 
     this.createTables();
+    this.runMigrations();
     this.saveDatabase();
   }
 
@@ -51,6 +63,7 @@ class WhatsAppDatabase {
         contact_id INTEGER,
         group_id INTEGER,
         message TEXT NOT NULL,
+        image_path TEXT,
         scheduled_time DATETIME,
         status TEXT DEFAULT 'pending',
         delay_seconds INTEGER DEFAULT 10,
@@ -66,6 +79,21 @@ class WhatsAppDatabase {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
     `);
+  }
+
+  runMigrations() {
+    try {
+      // Check if image_path column exists
+      const result = this.db.exec("PRAGMA table_info(scheduled_messages)");
+      const columns = result.length > 0 ? result[0].values.map(row => row[1]) : [];
+      
+      if (!columns.includes('image_path')) {
+        this.db.exec('ALTER TABLE scheduled_messages ADD COLUMN image_path TEXT');
+        console.log('✅ Added image_path column to scheduled_messages');
+      }
+    } catch (error) {
+      console.log('Migration already applied or error:', error.message);
+    }
   }
 
   saveDatabase() {
@@ -156,17 +184,17 @@ class WhatsAppDatabase {
     return 1;
   }
 
-  scheduleMessage(contactId, message, scheduledTime, groupId = null, delaySeconds = 10) {
-    const stmt = this.db.prepare('INSERT INTO scheduled_messages (contact_id, group_id, message, scheduled_time, delay_seconds) VALUES (?, ?, ?, ?, ?)');
-    stmt.run([contactId, groupId, message, scheduledTime, delaySeconds]);
+  scheduleMessage(contactId, message, scheduledTime, groupId = null, delaySeconds = 10, imagePath = null) {
+    const stmt = this.db.prepare('INSERT INTO scheduled_messages (contact_id, group_id, message, image_path, scheduled_time, delay_seconds) VALUES (?, ?, ?, ?, ?, ?)');
+    stmt.run([contactId, groupId, message, imagePath, scheduledTime, delaySeconds]);
     const result = this.db.exec('SELECT last_insert_rowid() as id')[0];
     this.saveDatabase();
     return result.values[0][0];
   }
 
-  scheduleGroupMessage(groupId, message, scheduledTime, delaySeconds = 10) {
-    const stmt = this.db.prepare('INSERT INTO scheduled_messages (group_id, message, scheduled_time, delay_seconds) VALUES (?, ?, ?, ?)');
-    stmt.run([groupId, message, scheduledTime, delaySeconds]);
+  scheduleGroupMessage(groupId, message, scheduledTime, delaySeconds = 10, imagePath = null) {
+    const stmt = this.db.prepare('INSERT INTO scheduled_messages (group_id, message, image_path, scheduled_time, delay_seconds) VALUES (?, ?, ?, ?, ?)');
+    stmt.run([groupId, message, imagePath, scheduledTime, delaySeconds]);
     const result = this.db.exec('SELECT last_insert_rowid() as id')[0];
     this.saveDatabase();
     return result.values[0][0];
@@ -208,7 +236,7 @@ class WhatsAppDatabase {
 
   getMessageQueue() {
     const result = this.db.exec(`
-      SELECT sm.id, sm.contact_id, sm.group_id, sm.message, sm.scheduled_time, 
+      SELECT sm.id, sm.contact_id, sm.group_id, sm.message, sm.image_path, sm.scheduled_time, 
              sm.status, sm.delay_seconds, sm.created_at,
              c.name as contact_name, g.name as group_name,
              CASE 
@@ -226,19 +254,20 @@ class WhatsAppDatabase {
       contact_id: row[1],
       group_id: row[2],
       message: row[3],
-      scheduled_time: row[4],
-      status: row[5],
-      delay_seconds: row[6],
-      created_at: row[7],
-      contact_name: row[8],
-      group_name: row[9],
-      type: row[10]
+      image_path: row[4],
+      scheduled_time: row[5],
+      status: row[6],
+      delay_seconds: row[7],
+      created_at: row[8],
+      contact_name: row[9],
+      group_name: row[10],
+      type: row[11]
     })) : [];
   }
 
   getAllPendingMessages() {
     const result = this.db.exec(`
-      SELECT sm.id, sm.contact_id, sm.group_id, sm.message, sm.scheduled_time, 
+      SELECT sm.id, sm.contact_id, sm.group_id, sm.message, sm.image_path, sm.scheduled_time, 
              sm.status, sm.delay_seconds, sm.created_at,
              c.name, c.phone, g.name as group_name
       FROM scheduled_messages sm 
@@ -251,13 +280,14 @@ class WhatsAppDatabase {
       contact_id: row[1],
       group_id: row[2],
       message: row[3],
-      scheduled_time: row[4],
-      status: row[5],
-      delay_seconds: row[6],
-      created_at: row[7],
-      name: row[8],
-      phone: row[9],
-      group_name: row[10]
+      image_path: row[4],
+      scheduled_time: row[5],
+      status: row[6],
+      delay_seconds: row[7],
+      created_at: row[8],
+      name: row[9],
+      phone: row[10],
+      group_name: row[11]
     })) : [];
   }
 
@@ -274,6 +304,71 @@ class WhatsAppDatabase {
     stmt.run(['pending']);
     this.saveDatabase();
     return 1;
+  }
+
+  deleteScheduledMessage(id) {
+    const stmt = this.db.prepare('DELETE FROM scheduled_messages WHERE id = ? AND status = ?');
+    stmt.run([id, 'pending']);
+    this.saveDatabase();
+    return 1;
+  }
+
+  bulkImportContacts(contacts) {
+    let imported = 0;
+    let errors = [];
+    
+    for (const contact of contacts) {
+      try {
+        this.addContact(contact.name, contact.phone, contact.groupId);
+        imported++;
+      } catch (error) {
+        errors.push(`${contact.name}: ${error.message}`);
+      }
+    }
+    
+    return { imported, errors };
+  }
+
+  cleanContacts() {
+    let cleaned = 0;
+    let duplicates = 0;
+    
+    // Primero limpiar formato
+    this.db.exec(`
+      UPDATE contacts 
+      SET phone = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', ''), '+', '')
+    `);
+    
+    // Eliminar números inválidos (muy cortos, muy largos, o que no sean solo dígitos)
+    this.db.exec(`
+      DELETE FROM contacts 
+      WHERE LENGTH(phone) < 10 
+      OR LENGTH(phone) > 13
+      OR phone NOT GLOB '[0-9]*'
+    `);
+    
+    const countResult = this.db.exec('SELECT changes() as count');
+    if (countResult.length > 0) {
+      cleaned = countResult[0].values[0][0];
+    }
+    
+    // Eliminar duplicados
+    this.db.exec(`
+      DELETE FROM contacts 
+      WHERE rowid NOT IN (
+        SELECT MIN(rowid) 
+        FROM contacts 
+        GROUP BY phone
+      )
+    `);
+    
+    const dupCountResult = this.db.exec('SELECT changes() as count');
+    if (dupCountResult.length > 0) {
+      duplicates = dupCountResult[0].values[0][0];
+    }
+    
+    this.saveDatabase();
+    return { cleaned, duplicates };
   }
 }
 

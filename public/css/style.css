@@ -359,6 +359,18 @@ body {
     font-size: 12px;
 }
 
+.queue-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+}
+
+.queue-actions .delete-btn {
+    font-size: 12px;
+    padding: 6px 12px;
+}
+
 .section-header {
     display: flex;
     justify-content: space-between;
@@ -554,4 +566,32 @@ body {
     color: #666;
     font-size: 12px;
     font-style: italic;
+}
+
+.import-buttons {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 10px;
+}
+
+.import-btn {
+    background-color: #17a2b8;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.3s;
+}
+
+.import-btn:hover {
+    background-color: #138496;
+}
+
+.image-indicator {
+    color: #25d366;
+    font-weight: bold;
+    display: block;
+    margin: 3px 0;
 }

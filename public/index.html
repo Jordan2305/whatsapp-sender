@@ -92,6 +92,17 @@
                         <button type="submit">Agregar Contacto</button>
                     </form>
                 </div>
+                <div class="form-card">
+                    <h3>Importar Contactos</h3>
+                    <div class="import-buttons">
+                        <button type="button" class="import-btn" onclick="app.importWhatsAppContacts()">Importar de WhatsApp</button>
+                        <input type="file" id="excel-file" accept=".xlsx,.xls,.csv" style="display: none;" onchange="app.importFromExcel(event)">
+                        <button type="button" class="import-btn" onclick="document.getElementById('excel-file').click()">Importar desde Excel/CSV</button>
+                        <button type="button" class="clean-btn" onclick="app.cleanContacts()">Limpiar Contactos</button>
+                    </div>
+                    <small>Excel/CSV debe tener columnas: Nombre, Teléfono, Grupo (opcional)</small>
+                    <small>Limpiar elimina duplicados y números inválidos</small>
+                </div>
                 <div class="contacts-list">
                     <div class="contacts-header">
                         <h3>Lista de Contactos</h3>
@@ -162,7 +173,12 @@
                         <select id="message-contact" required>
                             <option value="">Seleccionar contacto</option>
                         </select>
+                        <div class="radio-group">
+                            <label><input type="radio" name="message-type" value="text" checked onchange="app.toggleMessageType('message')"> Solo texto</label>
+                            <label><input type="radio" name="message-type" value="media" onchange="app.toggleMessageType('message')"> Texto + Imagen</label>
+                        </div>
                         <textarea id="message-text" placeholder="Escribe tu mensaje aquí..." required></textarea>
+                        <input type="file" id="message-image" accept="image/*" style="display: none;">
                         <button type="submit">Enviar Mensaje</button>
                     </form>
                 </div>
@@ -183,7 +199,12 @@
                         <select id="schedule-group" style="display: none;">
                             <option value="">Seleccionar grupo</option>
                         </select>
+                        <div class="radio-group">
+                            <label><input type="radio" name="schedule-message-type" value="text" checked onchange="app.toggleMessageType('schedule')"> Solo texto</label>
+                            <label><input type="radio" name="schedule-message-type" value="media" onchange="app.toggleMessageType('schedule')"> Texto + Imagen</label>
+                        </div>
                         <textarea id="schedule-text" placeholder="Escribe tu mensaje aquí..." required></textarea>
+                        <input type="file" id="schedule-image" accept="image/*" style="display: none;">
                         <input type="datetime-local" id="schedule-time" required>
                         <div class="delay-input">
                             <label for="message-delay">Tiempo de espera entre mensajes (segundos):</label>

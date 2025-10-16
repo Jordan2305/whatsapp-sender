@@ -1,9 +1,7 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
-const { spawn } = require('child_process');
 
 let mainWindow;
-let serverProcess;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -11,45 +9,35 @@ function createWindow() {
     height: 800,
     show: false,
     backgroundColor: '#f5f5f5',
-    icon: path.join(__dirname, '../public/icon.ico'),
     webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      enableRemoteModule: false,
-      webSecurity: true,
-      backgroundThrottling: false
+      nodeIntegration: true,
+      contextIsolation: false,
+      webSecurity: false
     }
   });
 
-  // Iniciar servidor
-  serverProcess = spawn('node', [path.join(__dirname, 'server.js')], {
-    cwd: path.join(__dirname, '..')
-  });
-
-  // Mostrar ventana cuando esté lista
-  mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
-  });
-
-  // Esperar a que el servidor inicie
+  // Ejecutar servidor directamente (sin spawn)
+  console.log('Starting integrated server...');
+  
+  // Importar y ejecutar el servidor en el mismo proceso
+  require('./server.js');
+  
+  // Esperar a que el servidor inicie y cargar la URL
   setTimeout(() => {
+    console.log('Loading application...');
     mainWindow.loadURL('http://localhost:3000');
-  }, 2000);
+    mainWindow.show();
+  }, 3000);
 
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
 }
 
-// Desactivar aceleración por hardware para evitar errores GPU
 app.disableHardwareAcceleration();
-
 app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => {
-  if (serverProcess) {
-    serverProcess.kill();
-  }
   if (process.platform !== 'darwin') {
     app.quit();
   }
@@ -58,11 +46,5 @@ app.on('window-all-closed', () => {
 app.on('activate', () => {
   if (mainWindow === null) {
     createWindow();
-  }
-});
-
-app.on('before-quit', () => {
-  if (serverProcess) {
-    serverProcess.kill();
   }
 });
