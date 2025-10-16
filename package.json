@@ -7,13 +7,18 @@
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "electron": "electron .",
-    "build": "electron-packager . WhatsApp-Sender --platform=win32 --arch=x64 --out=dist --overwrite --icon=public/icon.ico",
-    "build-mac": "electron-packager . WhatsApp-Sender --platform=darwin --arch=x64 --out=dist --overwrite --ignore='node_modules/.cache|data/.wwebjs_auth' --no-prune",
+    "build": "electron-packager . WhatsApp-Sender --platform=win32 --arch=x64 --out=dist --overwrite --icon=public/icon.ico --ignore=node_modules/.cache",
+    "build-mac": "electron-packager . WhatsApp-Sender --platform=darwin --arch=universal --out=dist --overwrite --ignore='node_modules/.cache|data/.wwebjs_auth' --no-prune",
+    "build-all": "npm run build && npm run build-mac",
     "build-mac-builder": "electron-builder --mac",
     "clean-db": "node scripts/clean-database.js",
     "prepare-build": "node scripts/prepare-build.js",
     "clean-session": "node scripts/clean-session.js",
-    "debug-build": "node scripts/clean-session.js && node scripts/prepare-build.js && npm run build-mac"
+    "prepare-windows": "node scripts/prepare-windows.js",
+    "prepare-mac": "node scripts/prepare-mac.js",
+    "debug-build": "node scripts/clean-session.js && node scripts/prepare-build.js && npm run build-mac",
+    "build-win": "node scripts/prepare-windows.js && npm run build",
+    "build-mac-cross": "node scripts/prepare-mac.js && npm run build-mac"
   },
   "dependencies": {
     "body-parser": "^1.20.2",
@@ -44,12 +49,14 @@
       "node_modules/**/*",
       "data/**/*",
       "uploads/**/*",
-      "scripts/**/*"
+      "scripts/**/*",
+      "!node_modules/.cache",
+      "!**/node_modules/.cache"
     ],
     "extraResources": [
       {
-        "from": "node_modules",
-        "to": "node_modules",
+        "from": "node_modules/puppeteer/.local-chromium",
+        "to": "node_modules/puppeteer/.local-chromium",
         "filter": [
           "**/*"
         ]
